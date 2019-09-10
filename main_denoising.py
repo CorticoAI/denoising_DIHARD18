@@ -67,6 +67,7 @@ import traceback
 import numpy as np
 import scipy.io.wavfile as wav_io
 import scipy.io as sio
+import librosa
 
 from decode_model import decode_model
 import utils
@@ -138,7 +139,9 @@ def denoise_wav(src_wav_file, dest_wav_file, global_mean, global_var, use_gpu,
     """
     # Read noisy audio WAV file. As scipy.io.wavefile.read is FAR faster than
     # librosa.load, we use the former.
-    rate, wav_data = wav_io.read(src_wav_file)
+    # rate, wav_data = wav_io.read(src_wav_file)
+    y, rate = librosa.core.load(src_wav_file, sr=None)
+    wav_data = y * 2**15
 
     # Apply peak-normalization.
     wav_data = utils.peak_normalization(wav_data)
@@ -289,7 +292,7 @@ def main():
         help='output directory for denoised WAV files (default: %(default)s)')
     parser.add_argument(
         '-S', dest='scpf', nargs=None, type=str, metavar='STR',
-        help='script file of paths to WAV files to denosie (detault: %(default)s)')
+        help='script file of paths to WAV files to denoise (default: %(default)s)')
     parser.add_argument(
         '--use_gpu', nargs=None, default='true', type=str, metavar='STR',
         choices=['true', 'false'],

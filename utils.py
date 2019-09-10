@@ -287,6 +287,17 @@ def listdir(dirpath, abspath=True, ext=None):
     fns = sorted(fns)
     return fns
 
+# Added by Wonjune Kang
+def listdir_walk(dirpath, ext=None):
+    fns = []
+    if ext is not None:
+        for r, d, f in os.walk(dirpath):
+            for fn in f:
+                if fn.endswith(ext):
+                    fns.append(os.path.join(r, fn))
+    fns = sorted(fns)
+    return fns
+
 
 def load_script_file(fn, ext=None):
     """Load HTK script file of paths."""
