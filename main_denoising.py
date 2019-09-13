@@ -62,6 +62,7 @@ import os
 import shutil
 import sys
 import tempfile
+import subprocess
 import traceback
 
 import numpy as np
@@ -77,7 +78,6 @@ GLOBAL_MEAN_VAR_MATF = os.path.join(HERE, 'model', 'global_mvn_stats.mat')
 
 
 SR = 16000 # Expected sample rate (Hz) of input WAV.
-NUM_CHANNELS = 1 # Expected number of channels of input WAV.
 BITDEPTH = 16 # Expected bitdepth of input WAV.
 WL = 512 # Analysis window length in samples for feature extraction.
 WL2 = WL // 2
@@ -256,9 +256,6 @@ def main_denoising(wav_files, output_dir, verbose=False, **kwargs):
             utils.error('Sample rate of file "%s" is not %d Hz. Skipping.' %
                         (src_wav_file, SR))
             continue
-        if utils.get_num_channels(src_wav_file) != NUM_CHANNELS:
-            utils.error('File "%s" is not monochannel. Skipping.' % src_wav_file)
-            continue
         if utils.get_bitdepth(src_wav_file) != BITDEPTH:
             utils.error('Bitdepth of file "%s" is not %d. Skipping.' %
                         (src_wav_file, BITDEPTH))
@@ -294,6 +291,9 @@ def main():
         '-S', dest='scpf', nargs=None, type=str, metavar='STR',
         help='script file of paths to WAV files to denoise (default: %(default)s)')
     parser.add_argument(
+        '--channels', nargs=None, default=1, type=int, metavar='INT',
+        help='number of channels in the WAV files (default: %(default)s)')
+    parser.add_argument(
         '--use_gpu', nargs=None, default='true', type=str, metavar='STR',
         choices=['true', 'false'],
         help='whether or not to use GPU (default: %(default)s)')
@@ -328,10 +328,42 @@ def main():
                    args.wav_dir)
         args.output_dir = args.wav_dir
 
+    # check number of channels.
+    for wav_file in wav_files:
+        if utils.get_num_channels(wav_file) != args.channels:
+            utils.error('File "%s" does not have %d channel(s). Skipping.' % (wav_file, args.channels))
+            wav_files.remove(wav_file)
+
     # Perform denoising.
-    main_denoising(
-        wav_files, args.output_dir, args.verbose, use_gpu=use_gpu, gpu_id=args.gpu_id,
-        truncate_minutes=args.truncate_minutes)
+    if args.channels != 1:
+        for wav_file in wav_files:
+            with tempfile.TemporaryDirectory(prefix="denoise_in_") as tempindir, \
+            tempfile.TemporaryDirectory(prefix="denoise_out") as tempoutdir:
+
+                cmdline = "ffmpeg -i {}".format(wav_file) + ''.join(" -map_channel 0.0.{0} {1}/ch{0}.wav".format(n, tempindir)
+                                                                    for n in range(args.channels))
+                print("run: {}".format(cmdline))
+                r = subprocess.run(cmdline.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if r.returncode != 0:
+                    print("run failed: {}".format(cmdline))
+                    return None
+
+                main_denoising(
+                    utils.listdir(tempindir), tempoutdir, args.verbose, use_gpu=use_gpu, gpu_id=args.gpu_id,
+                    truncate_minutes=args.truncate_minutes)
+
+                cmdline = "ffmpeg" + "".join(" -i {}".format(ch_file) for ch_file in utils.listdir(tempoutdir)) + \
+                    " -filter_complex \"" + "".join("[{}:a]".format(n) for n in range(args.channels)) + \
+                    "amerge=inputs={}[a]\" -map \"[a]\" {}/{}".format(args.channels, args.output_dir, os.path.basename(wav_file))
+                print("run: {}".format(cmdline))
+                r = subprocess.run(cmdline.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if r.returncode != 0:
+                    print("run failed: {}".format(cmdline))
+                    return None
+    else:
+        main_denoising(
+            wav_files, args.output_dir, args.verbose, use_gpu=use_gpu, gpu_id=args.gpu_id,
+            truncate_minutes=args.truncate_minutes)
 
 
 if __name__ == '__main__':
