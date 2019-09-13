@@ -3,7 +3,7 @@
 FROM mcr.microsoft.com/cntk/release:2.7-gpu-python3.5-cuda10.0-cudnn7.3
 
 # Update the Ubuntu distribution and install some text editors
-RUN apt-get update && apt-get upgrade -y && apt-get install -y nano vim emacs libsndfile1
+RUN apt-get update && apt-get upgrade -y && apt-get install -y nano vim emacs libsndfile1 ffmpeg
 
 # Add conda in the PATH and update it to the last version
 ENV PATH=/root/anaconda3/bin:$PATH
