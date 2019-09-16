@@ -338,29 +338,34 @@ def main():
     if args.channels != 1:
         for wav_file in wav_files:
             with tempfile.TemporaryDirectory(prefix="denoise_in_") as tempindir, \
-            tempfile.TemporaryDirectory(prefix="denoise_out") as tempoutdir:
+            tempfile.TemporaryDirectory(prefix="denoise_out_") as tempoutdir:
 
-                cmdline = "ffmpeg -i {}".format(wav_file) + ''.join(" -map_channel 0.0.{0} {1}/ch{0}.wav".format(n, tempindir)
-                                                                    for n in range(args.channels))
+                # split multichannel WAV file into individual files in temporary input dir
+                cmdline = "ffmpeg -i {}".format(wav_file) + "".join(
+                    " -map_channel 0.0.{0} {1}/ch{0}.wav".format(n, tempindir) for n in range(args.channels)
+                )
                 print("run: {}".format(cmdline))
-                r = subprocess.run(cmdline.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                r = subprocess.run(cmdline.split(), stdout=subprocess.DEVNULL, stderr=sys.stderr)
                 if r.returncode != 0:
                     print("run failed: {}".format(cmdline))
                     return None
 
+                # Perform denoising on individual channel files, write to temporary output dir
                 main_denoising(
                     utils.listdir(tempindir), tempoutdir, args.verbose, use_gpu=use_gpu, gpu_id=args.gpu_id,
                     truncate_minutes=args.truncate_minutes)
 
+                # merge denoised channels into single multichannel WAV, write to persistent output dir
                 cmdline = "ffmpeg" + "".join(" -i {}".format(ch_file) for ch_file in utils.listdir(tempoutdir)) + \
-                    " -filter_complex \"" + "".join("[{}:a]".format(n) for n in range(args.channels)) + \
-                    "amerge=inputs={}[a]\" -map \"[a]\" {}/{}".format(args.channels, args.output_dir, os.path.basename(wav_file))
+                    " -filter_complex " + "".join("[{}:a]".format(n) for n in range(args.channels)) + \
+                    "amerge=inputs={}[a] -map [a] {}/{}".format(args.channels, args.output_dir, os.path.basename(wav_file))
                 print("run: {}".format(cmdline))
-                r = subprocess.run(cmdline.split(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                r = subprocess.run(cmdline.split(), stdout=subprocess.DEVNULL, stderr=sys.stderr)
                 if r.returncode != 0:
                     print("run failed: {}".format(cmdline))
                     return None
     else:
+        # denoise single-channel input files directly
         main_denoising(
             wav_files, args.output_dir, args.verbose, use_gpu=use_gpu, gpu_id=args.gpu_id,
             truncate_minutes=args.truncate_minutes)
