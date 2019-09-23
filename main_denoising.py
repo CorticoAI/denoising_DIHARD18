@@ -291,9 +291,6 @@ def main():
         '-S', dest='scpf', nargs=None, type=str, metavar='STR',
         help='script file of paths to WAV files to denoise (default: %(default)s)')
     parser.add_argument(
-        '--channels', nargs=None, default=1, type=int, metavar='INT',
-        help='number of channels in the WAV files (default: %(default)s)')
-    parser.add_argument(
         '--use_gpu', nargs=None, default='true', type=str, metavar='STR',
         choices=['true', 'false'],
         help='whether or not to use GPU (default: %(default)s)')
@@ -328,27 +325,22 @@ def main():
                    args.wav_dir)
         args.output_dir = args.wav_dir
 
-    # check number of channels.
-    for wav_file in wav_files:
-        if utils.get_num_channels(wav_file) != args.channels:
-            utils.error('File "%s" does not have %d channel(s). Skipping.' % (wav_file, args.channels))
-            wav_files.remove(wav_file)
-
     # Perform denoising.
-    if args.channels != 1:
-        for wav_file in wav_files:
+    for wav_file in wav_files:
+        channels = utils.get_num_channels(wav_file)
+        if channels > 1:
             with tempfile.TemporaryDirectory(prefix="denoise_in_") as tempindir, \
             tempfile.TemporaryDirectory(prefix="denoise_out_") as tempoutdir:
 
                 # split multichannel WAV file into individual files in temporary input dir
                 cmdline = "ffmpeg -i {}".format(wav_file) + "".join(
-                    " -map_channel 0.0.{0} {1}/ch{0}.wav".format(n, tempindir) for n in range(args.channels)
+                    " -map_channel 0.0.{0} {1}/ch{0}.wav".format(n, tempindir) for n in range(channels)
                 )
                 print("run: {}".format(cmdline))
-                r = subprocess.run(cmdline.split(), stdout=subprocess.DEVNULL, stderr=sys.stderr)
+                r = subprocess.run(cmdline.split(), stdout=sys.stdout, stderr=sys.stderr)
                 if r.returncode != 0:
                     print("run failed: {}".format(cmdline))
-                    return None
+                    return
 
                 # Perform denoising on individual channel files, write to temporary output dir
                 main_denoising(
@@ -356,19 +348,22 @@ def main():
                     truncate_minutes=args.truncate_minutes)
 
                 # merge denoised channels into single multichannel WAV, write to persistent output dir
+                filename, ext = os.path.splitext(os.path.basename(wav_file))
                 cmdline = "ffmpeg" + "".join(" -i {}".format(ch_file) for ch_file in utils.listdir(tempoutdir)) + \
-                    " -filter_complex " + "".join("[{}:a]".format(n) for n in range(args.channels)) + \
-                    "amerge=inputs={}[a] -map [a] {}/{}".format(args.channels, args.output_dir, os.path.basename(wav_file))
+                    " -filter_complex " + "".join("[{}:a]".format(n) for n in range(channels)) + \
+                    "amerge=inputs={}[a] -map [a] {}/{}_enhanced{}".format(channels, args.output_dir, filename, ext)
                 print("run: {}".format(cmdline))
-                r = subprocess.run(cmdline.split(), stdout=subprocess.DEVNULL, stderr=sys.stderr)
+                r = subprocess.run(cmdline.split(), stdout=sys.stdout, stderr=sys.stderr)
                 if r.returncode != 0:
                     print("run failed: {}".format(cmdline))
-                    return None
-    else:
-        # denoise single-channel input files directly
-        main_denoising(
-            wav_files, args.output_dir, args.verbose, use_gpu=use_gpu, gpu_id=args.gpu_id,
-            truncate_minutes=args.truncate_minutes)
+                    return
+        elif channels == 1:
+            # denoise single-channel input files directly
+            main_denoising(
+                [wav_file], args.output_dir, args.verbose, use_gpu=use_gpu, gpu_id=args.gpu_id,
+                truncate_minutes=args.truncate_minutes)
+        else:
+            utils.error('File "{}" does not have a valid channel layout. Skipping.'.format(wav_file))
 
 
 if __name__ == '__main__':
