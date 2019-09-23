@@ -263,8 +263,8 @@ def main_denoising(wav_files, output_dir, verbose=False, **kwargs):
 
         # Denoise.
         try:
-            bn = os.path.basename(src_wav_file)
-            dest_wav_file = os.path.join(output_dir, bn)
+            filename, ext = os.path.splitext(os.path.basename(src_wav_file))
+            dest_wav_file = "{}_enhanced{}".format(os.path.join(output_dir, filename), ext)
             denoise_wav(src_wav_file, dest_wav_file, global_mean, global_var, **kwargs)
             print('Finished processing file "%s".' % src_wav_file)
         except Exception as e:
@@ -334,7 +334,7 @@ def main():
 
                 # split multichannel WAV file into individual files in temporary input dir
                 cmdline = "ffmpeg -i {}".format(wav_file) + "".join(
-                    " -map_channel 0.0.{0} {1}/ch{0}.wav".format(n, tempindir) for n in range(channels)
+                    " -map_channel 0.0.{} {}".format(n, os.path.join(tempindir, "ch{}.wav".format(n))) for n in range(channels)
                 )
                 print("run: {}".format(cmdline))
                 r = subprocess.run(cmdline.split(), stdout=sys.stdout, stderr=sys.stderr)
@@ -351,7 +351,7 @@ def main():
                 filename, ext = os.path.splitext(os.path.basename(wav_file))
                 cmdline = "ffmpeg" + "".join(" -i {}".format(ch_file) for ch_file in utils.listdir(tempoutdir)) + \
                     " -filter_complex " + "".join("[{}:a]".format(n) for n in range(channels)) + \
-                    "amerge=inputs={}[a] -map [a] {}/{}_enhanced{}".format(channels, args.output_dir, filename, ext)
+                    "amerge=inputs={}[a] -map [a] {}_enhanced{}".format(channels, os.path.join(args.output_dir, filename), ext)
                 print("run: {}".format(cmdline))
                 r = subprocess.run(cmdline.split(), stdout=sys.stdout, stderr=sys.stderr)
                 if r.returncode != 0:
