@@ -235,8 +235,6 @@ def main_denoising(wav_files, output_dir, verbose=False, **kwargs):
     kwargs
         Keyword arguments to pass to ``denoise_wav``.
     """
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
 
     # Load global MVN statistics.
     global_mean_var = sio.loadmat(GLOBAL_MEAN_VAR_MATF)
@@ -324,6 +322,8 @@ def main():
         utils.warn('Output directory not specified. Defaulting to "%s"' %
                    args.wav_dir)
         args.output_dir = args.wav_dir
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
 
     # Perform denoising.
     for wav_file in wav_files:
