@@ -45,7 +45,7 @@ the following flags:
 
 Optionally, label smoothing may be applied to the output of WebRTC to eliminate short,
 irregular silences and speech segments. Label smoothing is done using a median filter
-applied to the frame-level labeling produced by WebRTC and is controlled by the 
+applied to the frame-level labeling produced by WebRTC and is controlled by the
 ``--med_filt_width`` parameter.
 
 When processing large batches of audio, it may be desireable to parallelize the
@@ -67,8 +67,8 @@ import os
 import sys
 import traceback
 
-from joblib import delayed, Parallel
 import librosa
+from joblib import delayed, Parallel
 
 import utils
 from utils import VALID_VAD_SRS, VALID_VAD_FRAME_LENGTHS, VALID_VAD_MODES
@@ -168,7 +168,7 @@ def main():
         parser.error('--mode must be one of %s' % VALID_VAD_MODES)
         sys.exit(1)
     if (not isinstance(args.med_filt_width, numbers.Integral) or
-        args.med_filt_width % 2 == 0):
+            args.med_filt_width % 2 == 0):
         parser.error('--med_filt_width must be an odd integer')
         sys.exit(1)
     args.frame_length = args.hoplength # Retain hoplength argument for compatibility.
@@ -186,7 +186,7 @@ def main():
         args.output_dir = args.wav_dir
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
-        
+
     # Perform VAD.
     def kwargs_gen():
         for wav_file in wav_files:
@@ -203,7 +203,7 @@ def main():
     for res_, wav_file in zip(res, wav_files):
         if res_ is None:
             continue
-        e, tb = res_
+        _, tb = res_
         msg = 'Problem encountered while processing file "%s". Skipping.' % wav_file
         if args.verbose:
             msg = '%s Full error output:\n%s' % (msg, tb)

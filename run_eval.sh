@@ -8,7 +8,6 @@
 ###################################
 WAV_DIR=/data/wav/  # Directory of WAV files (16 kHz, 16 bit) to enhance.
 SE_WAV_DIR=/data/wav_pn_enhanced  # Output directory for enhanced WAV.
-NUM_CHANNELS=8 # Number of channels in input WAV files.
 USE_GPU=true  # Use GPU instead of CPU. To instead use CPU, set to 'false'.
 GPU_DEVICE_ID=0  # Use GPU with device id 0. Irrelevant if using CPU.
 TRUNCATE_MINUTES=10  # Duration in minutes of chunks for enhancement. If you experience
@@ -16,7 +15,6 @@ TRUNCATE_MINUTES=10  # Duration in minutes of chunks for enhancement. If you exp
 python main_denoising.py \
        --verbose \
        --wav_dir $WAV_DIR --output_dir $SE_WAV_DIR \
-       --channels $NUM_CHANNELS \
        --use_gpu $USE_GPU --gpu_id $GPU_DEVICE_ID \
        --truncate_minutes $TRUNCATE_MINUTES || exit 1
 
