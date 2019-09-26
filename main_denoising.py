@@ -251,13 +251,12 @@ def main_denoising(wav_files, output_dir, verbose=False, **kwargs):
             utils.error('File "%s" is not WAV. Skipping.' % src_wav_file)
             continue
         if utils.get_sr(src_wav_file) != SR:
-            utils.error('Sample rate of file "%s" is not %d Hz. Skipping.' %
-                        (src_wav_file, SR))
-            continue
+            utils.warn('Sample rate of file "%s" is %d Hz. Will convert to %d Hz.' %
+                       (src_wav_file, utils.get_sr(src_wav_file), SR))
+
         if utils.get_bitdepth(src_wav_file) != BITDEPTH:
-            utils.error('Bitdepth of file "%s" is not %d. Skipping.' %
-                        (src_wav_file, BITDEPTH))
-            continue
+            utils.warn('Bitdepth of file "%s" is %d. Will convert to %d.' %
+                       (src_wav_file, utils.get_bitdepth(src_wav_file), BITDEPTH))
 
         channels = utils.get_num_channels(src_wav_file)
         if channels < 1:
@@ -265,57 +264,47 @@ def main_denoising(wav_files, output_dir, verbose=False, **kwargs):
                         src_wav_file)
             continue
 
-        filename, ext = os.path.splitext(os.path.basename(src_wav_file))
-        dest_wav_file = "{}_enhanced{}".format(os.path.join(output_dir, filename), ext)
+        with tempfile.TemporaryDirectory(prefix="denoise_in_") as tempindir, \
+        tempfile.TemporaryDirectory(prefix="denoise_out_") as tempoutdir:
 
-        if channels > 1:
-            with tempfile.TemporaryDirectory(prefix="denoise_in_") as tempindir, \
-            tempfile.TemporaryDirectory(prefix="denoise_out_") as tempoutdir:
+            # split WAV file into individual channel files, convert to 16-bit SR kHz (16 kHz)
+            cmdline = "ffmpeg -i {}".format(src_wav_file) + "".join(
+                " -map_channel 0.0.{} -acodec pcm_s16le -ar {} {}".format(
+                    n, SR, os.path.join(tempindir, "ch{}.wav".format(n))
+                    ) for n in range(channels)
+            )
+            print("run: {}".format(cmdline))
+            r = subprocess.run(cmdline.split(), stdout=sys.stdout, stderr=sys.stderr)
+            if r.returncode != 0:
+                print("run failed: {}".format(cmdline))
+                return
 
-                # split multichannel WAV file into individual files in temporary input dir
-                cmdline = "ffmpeg -i {}".format(src_wav_file) + "".join(
-                    " -map_channel 0.0.{} {}".format(n, os.path.join(tempindir, "ch{}.wav".format(n))) for n in range(channels)
-                )
-                print("run: {}".format(cmdline))
-                r = subprocess.run(cmdline.split(), stdout=sys.stdout, stderr=sys.stderr)
-                if r.returncode != 0:
-                    print("run failed: {}".format(cmdline))
-                    return
+            # Perform denoising on individual channel files, write to temporary output dir
+            for ch_file in utils.listdir(tempindir):
+                try:
+                    ch_filename, ch_ext = os.path.splitext(os.path.basename(ch_file))
+                    dest_ch_file = "{}_enhanced{}".format(os.path.join(tempoutdir, ch_filename), ch_ext)
+                    denoise_wav(ch_file, dest_ch_file, global_mean, global_var, **kwargs)
+                    print('Finished processing file "%s".' % ch_file)
+                except Exception as e:
+                    msg = 'Problem encountered while processing file "%s". Skipping.' % ch_file
+                    if verbose:
+                        msg = '%s Full error output:\n%s' % (msg, e)
+                    utils.error(msg)
+                    continue
 
-                # Perform denoising on individual channel files, write to temporary output dir
-                for ch_file in utils.listdir(tempindir):
-                    try:
-                        ch_filename, ch_ext = os.path.splitext(os.path.basename(ch_file))
-                        dest_ch_file = "{}_enhanced{}".format(os.path.join(tempoutdir, ch_filename), ch_ext)
-                        denoise_wav(ch_file, dest_ch_file, global_mean, global_var, **kwargs)
-                        print('Finished processing file "%s".' % ch_file)
-                    except Exception as e:
-                        msg = 'Problem encountered while processing file "%s". Skipping.' % ch_file
-                        if verbose:
-                            msg = '%s Full error output:\n%s' % (msg, e)
-                        utils.error(msg)
-                        continue
+            # merge denoised channels into single WAV, write to persistent output dir
+            filename, ext = os.path.splitext(os.path.basename(src_wav_file))
+            dest_wav_file = "{}_enhanced{}".format(os.path.join(output_dir, filename), ext)
 
-                # merge denoised channels into single multichannel WAV, write to persistent output dir
-                cmdline = "ffmpeg" + "".join(" -i {}".format(ch_file) for ch_file in utils.listdir(tempoutdir)) + \
-                    " -filter_complex " + "".join("[{}:a]".format(n) for n in range(channels)) + \
-                    "amerge=inputs={}[a] -map [a] {}".format(channels, dest_wav_file)
-                print("run: {}".format(cmdline))
-                r = subprocess.run(cmdline.split(), stdout=sys.stdout, stderr=sys.stderr)
-                if r.returncode != 0:
-                    print("run failed: {}".format(cmdline))
-                    return
-        else:
-            # denoise single-channel input files directly
-            try:
-                denoise_wav(src_wav_file, dest_wav_file, global_mean, global_var, **kwargs)
-                print('Finished processing file "%s".' % src_wav_file)
-            except Exception as e:
-                msg = 'Problem encountered while processing file "%s". Skipping.' % src_wav_file
-                if verbose:
-                    msg = '%s Full error output:\n%s' % (msg, e)
-                utils.error(msg)
-                continue
+            cmdline = "ffmpeg" + "".join(" -i {}".format(ch_file) for ch_file in utils.listdir(tempoutdir)) + \
+                " -filter_complex " + "".join("[{}:a]".format(n) for n in range(channels)) + \
+                "amerge=inputs={}[a] -map [a] {}".format(channels, dest_wav_file)
+            print("run: {}".format(cmdline))
+            r = subprocess.run(cmdline.split(), stdout=sys.stdout, stderr=sys.stderr)
+            if r.returncode != 0:
+                print("run failed: {}".format(cmdline))
+                return
 
 
 # TODO: Logging is getting complicated. Consider adding a custom logger...
