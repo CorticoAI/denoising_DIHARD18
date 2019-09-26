@@ -259,18 +259,63 @@ def main_denoising(wav_files, output_dir, verbose=False, **kwargs):
                         (src_wav_file, BITDEPTH))
             continue
 
-        # Denoise.
-        try:
-            filename, ext = os.path.splitext(os.path.basename(src_wav_file))
-            dest_wav_file = "{}_enhanced{}".format(os.path.join(output_dir, filename), ext)
-            denoise_wav(src_wav_file, dest_wav_file, global_mean, global_var, **kwargs)
-            print('Finished processing file "%s".' % src_wav_file)
-        except Exception as e:
-            msg = 'Problem encountered while processing file "%s". Skipping.' % src_wav_file
-            if verbose:
-                msg = '%s Full error output:\n%s' % (msg, e)
-            utils.error(msg)
+        channels = utils.get_num_channels(src_wav_file)
+        if channels < 1:
+            utils.error('File "%s" does not have a valid channel layout. Skipping.' %
+                        src_wav_file)
             continue
+
+        filename, ext = os.path.splitext(os.path.basename(src_wav_file))
+        dest_wav_file = "{}_enhanced{}".format(os.path.join(output_dir, filename), ext)
+
+        if channels > 1:
+            with tempfile.TemporaryDirectory(prefix="denoise_in_") as tempindir, \
+            tempfile.TemporaryDirectory(prefix="denoise_out_") as tempoutdir:
+
+                # split multichannel WAV file into individual files in temporary input dir
+                cmdline = "ffmpeg -i {}".format(src_wav_file) + "".join(
+                    " -map_channel 0.0.{} {}".format(n, os.path.join(tempindir, "ch{}.wav".format(n))) for n in range(channels)
+                )
+                print("run: {}".format(cmdline))
+                r = subprocess.run(cmdline.split(), stdout=sys.stdout, stderr=sys.stderr)
+                if r.returncode != 0:
+                    print("run failed: {}".format(cmdline))
+                    return
+
+                # Perform denoising on individual channel files, write to temporary output dir
+                for ch_file in utils.listdir(tempindir):
+                    try:
+                        ch_filename, ch_ext = os.path.splitext(os.path.basename(ch_file))
+                        dest_ch_file = "{}_enhanced{}".format(os.path.join(tempoutdir, ch_filename), ch_ext)
+                        denoise_wav(ch_file, dest_ch_file, global_mean, global_var, **kwargs)
+                        print('Finished processing file "%s".' % ch_file)
+                    except Exception as e:
+                        msg = 'Problem encountered while processing file "%s". Skipping.' % ch_file
+                        if verbose:
+                            msg = '%s Full error output:\n%s' % (msg, e)
+                        utils.error(msg)
+                        continue
+
+                # merge denoised channels into single multichannel WAV, write to persistent output dir
+                cmdline = "ffmpeg" + "".join(" -i {}".format(ch_file) for ch_file in utils.listdir(tempoutdir)) + \
+                    " -filter_complex " + "".join("[{}:a]".format(n) for n in range(channels)) + \
+                    "amerge=inputs={}[a] -map [a] {}".format(channels, dest_wav_file)
+                print("run: {}".format(cmdline))
+                r = subprocess.run(cmdline.split(), stdout=sys.stdout, stderr=sys.stderr)
+                if r.returncode != 0:
+                    print("run failed: {}".format(cmdline))
+                    return
+        else:
+            # denoise single-channel input files directly
+            try:
+                denoise_wav(src_wav_file, dest_wav_file, global_mean, global_var, **kwargs)
+                print('Finished processing file "%s".' % src_wav_file)
+            except Exception as e:
+                msg = 'Problem encountered while processing file "%s". Skipping.' % src_wav_file
+                if verbose:
+                    msg = '%s Full error output:\n%s' % (msg, e)
+                utils.error(msg)
+                continue
 
 
 # TODO: Logging is getting complicated. Consider adding a custom logger...
@@ -326,44 +371,9 @@ def main():
         os.makedirs(args.output_dir)
 
     # Perform denoising.
-    for wav_file in wav_files:
-        channels = utils.get_num_channels(wav_file)
-        if channels > 1:
-            with tempfile.TemporaryDirectory(prefix="denoise_in_") as tempindir, \
-            tempfile.TemporaryDirectory(prefix="denoise_out_") as tempoutdir:
-
-                # split multichannel WAV file into individual files in temporary input dir
-                cmdline = "ffmpeg -i {}".format(wav_file) + "".join(
-                    " -map_channel 0.0.{} {}".format(n, os.path.join(tempindir, "ch{}.wav".format(n))) for n in range(channels)
-                )
-                print("run: {}".format(cmdline))
-                r = subprocess.run(cmdline.split(), stdout=sys.stdout, stderr=sys.stderr)
-                if r.returncode != 0:
-                    print("run failed: {}".format(cmdline))
-                    return
-
-                # Perform denoising on individual channel files, write to temporary output dir
-                main_denoising(
-                    utils.listdir(tempindir), tempoutdir, args.verbose, use_gpu=use_gpu, gpu_id=args.gpu_id,
-                    truncate_minutes=args.truncate_minutes)
-
-                # merge denoised channels into single multichannel WAV, write to persistent output dir
-                filename, ext = os.path.splitext(os.path.basename(wav_file))
-                cmdline = "ffmpeg" + "".join(" -i {}".format(ch_file) for ch_file in utils.listdir(tempoutdir)) + \
-                    " -filter_complex " + "".join("[{}:a]".format(n) for n in range(channels)) + \
-                    "amerge=inputs={}[a] -map [a] {}_enhanced{}".format(channels, os.path.join(args.output_dir, filename), ext)
-                print("run: {}".format(cmdline))
-                r = subprocess.run(cmdline.split(), stdout=sys.stdout, stderr=sys.stderr)
-                if r.returncode != 0:
-                    print("run failed: {}".format(cmdline))
-                    return
-        elif channels == 1:
-            # denoise single-channel input files directly
-            main_denoising(
-                [wav_file], args.output_dir, args.verbose, use_gpu=use_gpu, gpu_id=args.gpu_id,
-                truncate_minutes=args.truncate_minutes)
-        else:
-            utils.error('File "{}" does not have a valid channel layout. Skipping.'.format(wav_file))
+    main_denoising(
+        wav_files, args.output_dir, args.verbose, use_gpu=use_gpu, gpu_id=args.gpu_id,
+        truncate_minutes=args.truncate_minutes)
 
 
 if __name__ == '__main__':
