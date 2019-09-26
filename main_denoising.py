@@ -299,7 +299,7 @@ def main_denoising(wav_files, output_dir, verbose=False, **kwargs):
 
             cmdline = "ffmpeg" + "".join(" -i {}".format(ch_file) for ch_file in utils.listdir(tempoutdir)) + \
                 " -filter_complex " + "".join("[{}:a]".format(n) for n in range(channels)) + \
-                "amerge=inputs={}[a] -map [a] {}".format(channels, dest_wav_file)
+                "join=inputs={0}:channel_layout={0}c[a] -map [a] {1}".format(channels, dest_wav_file)
             print("run: {}".format(cmdline))
             r = subprocess.run(cmdline.split(), stdout=sys.stdout, stderr=sys.stderr)
             if r.returncode != 0:
