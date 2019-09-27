@@ -245,11 +245,12 @@ def main_denoising(wav_files, output_dir, verbose=False, **kwargs):
     for src_wav_file in wav_files:
         # Perform basic checks of input WAV.
         if not os.path.exists(src_wav_file):
-            utils.error('File "%s" does not exist. Skipping.' % src_wav_file)
-            continue
-        if not utils.is_wav(src_wav_file):
-            utils.error('File "%s" is not WAV. Skipping.' % src_wav_file)
-            continue
+            raise Exception('File "%s" does not exist.' % src_wav_file)
+
+        if utils.get_file_type(src_wav_file) != 'wav':
+            raise Exception('File "%s" is not valid WAV. Type: %s' %
+                            (src_wav_file, utils.get_file_type(src_wav_file)))
+
         if utils.get_sr(src_wav_file) != SR:
             utils.warn('Sample rate of file "%s" is %d Hz. Will convert to %d Hz.' %
                        (src_wav_file, utils.get_sr(src_wav_file), SR))
@@ -260,9 +261,8 @@ def main_denoising(wav_files, output_dir, verbose=False, **kwargs):
 
         channels = utils.get_num_channels(src_wav_file)
         if channels < 1:
-            utils.error('File "%s" does not have a valid channel layout. Skipping.' %
-                        src_wav_file)
-            continue
+            raise Exception('File "%s" does not have a valid channel layout.' %
+                            src_wav_file)
 
         with tempfile.TemporaryDirectory(prefix="denoise_in_") as tempindir, \
         tempfile.TemporaryDirectory(prefix="denoise_out_") as tempoutdir:
@@ -287,11 +287,9 @@ def main_denoising(wav_files, output_dir, verbose=False, **kwargs):
                     denoise_wav(ch_file, dest_ch_file, global_mean, global_var, **kwargs)
                     print('Finished processing file "%s".' % ch_file)
                 except Exception as e:
-                    msg = 'Problem encountered while processing file "%s". Skipping.' % ch_file
-                    if verbose:
-                        msg = '%s Full error output:\n%s' % (msg, e)
+                    msg = 'Problem encountered while processing file "%s":' % ch_file
                     utils.error(msg)
-                    continue
+                    raise e
 
             # merge denoised channels into single WAV, write to persistent output dir
             filename, ext = os.path.splitext(os.path.basename(src_wav_file))

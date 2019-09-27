@@ -331,6 +331,14 @@ def is_wav(fn):
     return True
 
 
+def get_file_type(fn):
+    """Return file type of WAV file."""
+    hinfo = sndhdr.what(fn)
+    if hinfo is None:
+        return None
+    return hinfo[0]
+
+
 def get_sr(fn):
     """Return sample rate in Hz of WAV file."""
     if not is_wav(fn):
