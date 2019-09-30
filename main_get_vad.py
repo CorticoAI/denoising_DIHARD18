@@ -177,22 +177,24 @@ def main():
     if args.scpf is not None:
         wav_files = utils.load_script_file(args.scpf, '.wav')
     else:
-        wav_files = utils.listdir(args.wav_dir, ext='.wav')
+        wav_files = utils.listdir_walk(args.wav_dir, ext='.wav')
 
     # Determine output directory for VAD.
     if args.output_dir is None and args.wav_dir is not None:
         utils.warn('Output directory not specified. Defaulting to "%s"' %
                    args.wav_dir)
         args.output_dir = args.wav_dir
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
 
     # Perform VAD.
     def kwargs_gen():
         for wav_file in wav_files:
-            bn = os.path.basename(wav_file)
+            filename, _ = os.path.splitext(wav_file.replace(args.wav_dir, '', 1).lstrip('/'))
+            subdir_path = os.path.join(args.output_dir, os.path.dirname(filename))
+            if not os.path.exists(subdir_path):
+                os.makedirs(subdir_path)
+
             segs_file = os.path.join(
-                args.output_dir, bn.replace('.wav', args.output_ext))
+                args.output_dir, filename + args.output_ext)
             yield dict(
                 wav_file=wav_file, segs_file=segs_file,
                 speech_label=args.speech_label, fs_vad=args.fs_vad,
