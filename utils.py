@@ -290,11 +290,10 @@ def listdir(dirpath, abspath=True, ext=None):
 # Added by Wonjune Kang
 def listdir_walk(dirpath, ext=None):
     fns = []
-    if ext is not None:
-        for r, d, f in os.walk(dirpath):
-            for fn in f:
-                if fn.endswith(ext):
-                    fns.append(os.path.join(r, fn))
+    for root, _, files in os.walk(dirpath):
+        for fn in files:
+            if ext is None or fn.endswith(ext):
+                fns.append(os.path.join(root, fn))
     fns = sorted(fns)
     return fns
 

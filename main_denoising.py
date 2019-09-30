@@ -218,7 +218,7 @@ def denoise_wav(src_wav_file, dest_wav_file, global_mean, global_var, use_gpu,
     wav_io.write(dest_wav_file, SR, data_se)
 
 
-def main_denoising(wav_files, output_dir, verbose=False, **kwargs):
+def main_denoising(wav_files, output_dir, wav_dir=None, verbose=False, **kwargs):
     """Perform speech enhancement for WAV files in ``wav_dir``.
 
     Parameters
@@ -228,6 +228,10 @@ def main_denoising(wav_files, output_dir, verbose=False, **kwargs):
 
     output_dir : str
         Path to output directory for enhanced WAV files.
+
+    wav_dir : str, optional
+        Path to root input directory. If provided, output_dir will
+        mirror the subdirectory structure of wav_dir.
 
     verbose : bool, optional
         If True, print full stacktrace to STDERR for files with errors.
@@ -292,7 +296,15 @@ def main_denoising(wav_files, output_dir, verbose=False, **kwargs):
                     raise e
 
             # merge denoised channels into single WAV, write to persistent output dir
-            filename, ext = os.path.splitext(os.path.basename(src_wav_file))
+            if wav_dir:
+                filename, ext = os.path.splitext(src_wav_file.replace(wav_dir, '', 1).lstrip('/'))
+            else:
+                filename, ext = os.path.splitext(os.path.basename(src_wav_file))
+
+            subdir_path = os.path.join(output_dir, os.path.dirname(filename))
+            if not os.path.exists(subdir_path):
+                os.makedirs(subdir_path)
+
             dest_wav_file = "{}_enhanced{}".format(os.path.join(output_dir, filename), ext)
 
             cmdline = "ffmpeg" + "".join(" -i {}".format(ch_file) for ch_file in utils.listdir(tempoutdir)) + \
@@ -347,20 +359,18 @@ def main():
     if args.scpf is not None:
         wav_files = utils.load_script_file(args.scpf, '.wav')
     else:
-        wav_files = utils.listdir(args.wav_dir, ext='.wav')
+        wav_files = utils.listdir_walk(args.wav_dir, ext='.wav')
 
     # Determine output directory for denoised audio.
     if args.output_dir is None and args.wav_dir is not None:
         utils.warn('Output directory not specified. Defaulting to "%s"' %
                    args.wav_dir)
         args.output_dir = args.wav_dir
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
 
     # Perform denoising.
     main_denoising(
-        wav_files, args.output_dir, args.verbose, use_gpu=use_gpu, gpu_id=args.gpu_id,
-        truncate_minutes=args.truncate_minutes)
+        wav_files, args.output_dir, args.wav_dir, args.verbose, use_gpu=use_gpu,
+        gpu_id=args.gpu_id, truncate_minutes=args.truncate_minutes)
 
 
 if __name__ == '__main__':
