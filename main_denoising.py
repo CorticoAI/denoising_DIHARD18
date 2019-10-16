@@ -251,7 +251,7 @@ def main_denoising(wav_files, output_dir, wav_dir=None, verbose=False, **kwargs)
         if not os.path.exists(src_wav_file):
             raise Exception('File "%s" does not exist.' % src_wav_file)
 
-        if utils.get_file_type(src_wav_file) != 'wav':
+        if not utils.is_wav(src_wav_file):
             raise Exception('File "%s" is not valid WAV. Type: %s' %
                             (src_wav_file, utils.get_file_type(src_wav_file)))
 
@@ -273,7 +273,7 @@ def main_denoising(wav_files, output_dir, wav_dir=None, verbose=False, **kwargs)
 
             # split WAV file into individual channel files, convert to 16-bit SR kHz (16 kHz)
             cmdline = "ffmpeg -i {}".format(src_wav_file) + "".join(
-                " -map_channel 0.0.{} -acodec pcm_s16le -ar {} {}".format(
+                " -flags bitexact -map_channel 0.0.{} -acodec pcm_s16le -ar {} {}".format(
                     n, SR, os.path.join(tempindir, "ch{}.wav".format(n))
                     ) for n in range(channels)
             )
@@ -308,7 +308,7 @@ def main_denoising(wav_files, output_dir, wav_dir=None, verbose=False, **kwargs)
             dest_wav_file = "{}_enhanced{}".format(os.path.join(output_dir, filename), ext)
 
             cmdline = "ffmpeg" + "".join(" -i {}".format(ch_file) for ch_file in utils.listdir(tempoutdir)) + \
-                " -filter_complex " + "".join("[{}:a]".format(n) for n in range(channels)) + \
+                " -flags bitexact -filter_complex " + "".join("[{}:a]".format(n) for n in range(channels)) + \
                 "join=inputs={0}:channel_layout={0}c[a] -map [a] {1}".format(channels, dest_wav_file)
             print("run: {}".format(cmdline))
             r = subprocess.run(cmdline.split(), stdout=sys.stdout, stderr=sys.stderr)

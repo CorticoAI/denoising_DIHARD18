@@ -13,6 +13,8 @@ import numpy as np
 import scipy.signal
 import webrtcvad
 
+from wavinfo import WavInfoReader
+
 EPS = 1e-8
 
 
@@ -322,10 +324,9 @@ def xor(x, y):
 
 def is_wav(fn):
     """Returns True if ``fn`` is a WAV file."""
-    hinfo = sndhdr.what(fn)
-    if hinfo is None:
-        return False
-    elif hinfo[0] != 'wav':
+    try:
+        WavInfoReader(fn)
+    except AttributeError:
         return False
     return True
 
@@ -342,21 +343,21 @@ def get_sr(fn):
     """Return sample rate in Hz of WAV file."""
     if not is_wav(fn):
         raise ValueError('File "%s" is not a valid WAV file.' % fn)
-    hinfo = sndhdr.what(fn)
-    return hinfo[1]
+    hinfo = WavInfoReader(fn)
+    return hinfo.fmt.sample_rate
 
 
 def get_num_channels(fn):
     """Return number of channels present in  WAV file."""
     if not is_wav(fn):
         raise ValueError('File "%s" is not a valid WAV file.' % fn)
-    hinfo = sndhdr.what(fn)
-    return hinfo[2]
+    hinfo = WavInfoReader(fn)
+    return hinfo.fmt.channel_count
 
 
 def get_bitdepth(fn):
     """Return bitdepth of WAV file."""
     if not is_wav(fn):
         raise ValueError('File "%s" is not a valid WAV file.' % fn)
-    hinfo = sndhdr.what(fn)
-    return hinfo[4]
+    hinfo = WavInfoReader(fn)
+    return hinfo.fmt.bits_per_sample
