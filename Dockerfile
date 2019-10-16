@@ -3,7 +3,10 @@
 FROM mcr.microsoft.com/cntk/release:2.7-gpu-python3.5-cuda10.0-cudnn7.3
 
 # Update the Ubuntu distribution and install some text editors
-RUN apt-get update && apt-get upgrade -y && apt-get install -y nano vim emacs libsndfile1 ffmpeg
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y nano vim emacs-nox libsndfile1 ffmpeg && \
+    apt-get clean
 
 # Add conda in the PATH and update it to the last version
 ENV PATH=/root/anaconda3/bin:$PATH
@@ -15,8 +18,8 @@ RUN bash -c "source activate dihard18 && \
         conda install -c anaconda scipy && \
         pip install --upgrade pip && \
         pip install librosa webrtcvad && \
-        pip install wurlitzer joblib"
-RUN rm -rf /root/anaconda3/envs/cntk-py35
+        pip install wurlitzer joblib wavinfo && \
+        rm -rf /root/anaconda3/envs/cntk-py35"
 
 # Automatically activate the virtual environment when running a docker
 # bash session
