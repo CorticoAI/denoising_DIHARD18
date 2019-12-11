@@ -301,7 +301,7 @@ def main_denoising(wav_files, output_dir, wav_dir=None, verbose=False, **kwargs)
 
             # split WAV file into individual channel files, convert to 16-bit SR kHz (16 kHz)
             cmdline = "ffmpeg -i {}".format(src_wav_file) + "".join(
-                " -flags bitexact -map_channel 0.0.{} -acodec pcm_s16le -ar {} {}".format(
+                " -map_channel 0.0.{} -acodec pcm_s16le -ar {} {}".format(
                     n, SR, os.path.join(tempindir, "ch{}.wav".format(n))
                     ) for n in range(channels)
             )

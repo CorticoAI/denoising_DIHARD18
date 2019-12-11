@@ -17,7 +17,7 @@ RUN conda create --name dihard18 --clone cntk-py35
 RUN bash -c "source activate dihard18 && \
         conda install -c anaconda scipy && \
         pip install --upgrade pip && \
-        pip install librosa webrtcvad && \
+        pip install librosa webrtcvad boto3 && \
         pip install wurlitzer joblib wavinfo && \
         rm -rf /root/anaconda3/envs/cntk-py35"
 
