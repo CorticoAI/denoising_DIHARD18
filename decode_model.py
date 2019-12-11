@@ -98,7 +98,10 @@ def decode_model(features_file, irm_mat_dir, feature_dim, use_gpu=True,
             output_nodes = combine([node_in_graph.owner])
             with wurlitzer.pipes() as (stdout, stderr):
                 irm = output_nodes.eval(real_noisy_fea)
-            irm = np.concatenate((irm), axis=0)
+            if len(irm) == 1:
+                irm = irm[0]
+            else:
+                raise Exception("Unexpected IRM shape: " + str(np.shape(irm)))
 
             # Write .mat file.
             sio.savemat(

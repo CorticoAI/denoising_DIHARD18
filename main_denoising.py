@@ -57,13 +57,15 @@ from __future__ import print_function
 from __future__ import unicode_literals
 import argparse
 import math
-import multiprocessing
 import os
 import shutil
 import sys
 import tempfile
 import subprocess
 import traceback
+
+from functools import wraps
+from multiprocessing import Process, Queue
 
 import numpy as np
 import scipy.io.wavfile as wav_io
@@ -84,26 +86,48 @@ WL2 = WL // 2
 NFREQS = 257 # Number of positive frequencies in FFT output.
 
 
-class Process(multiprocessing.Process):
-    """Subclass of ``Process`` that retains raised exceptions as an attribute."""
-    def __init__(self, *args, **kwargs):
-        multiprocessing.Process.__init__(self, *args, **kwargs)
-        self._pconn, self._cconn = multiprocessing.Pipe()
-        self._exception = None
+def processify(func):
+    '''Decorator to run a function as a process.
+    Be sure that every argument and the return value
+    is *picklable*.
+    The created process is joined, so the code does not
+    run in parallel.
+    '''
 
-    def run(self):
+    def process_func(q, *args, **kwargs):
         try:
-            super(Process, self).run()
-            self._cconn.send(None)
-        except Exception as e:
-            tb = traceback.format_exc()
-            self._cconn.send((e, tb))
+            ret = func(*args, **kwargs)
+        except Exception:
+            ex_type, ex_value, tb = sys.exc_info()
+            error = ex_type, ex_value, ''.join(traceback.format_tb(tb))
+            ret = None
+        else:
+            error = None
 
-    @property
-    def exception(self):
-        if self._pconn.poll():
-            self._exception = self._pconn.recv()
-        return self._exception
+        q.put((ret, error))
+
+    # register original function with different name
+    # in sys.modules so it is picklable
+    process_func.__name__ = func.__name__ + 'processify_func'
+    setattr(sys.modules[__name__], process_func.__name__, process_func)
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        q = Queue()
+        p = Process(target=process_func, args=[q] + list(args), kwargs=kwargs)
+        p.start()
+        ret, error = q.get()
+        p.join()
+
+        if error:
+            ex_type, ex_value, tb_str = error
+            message = '%s (in subprocess)\n%s' % (ex_value, tb_str)
+            raise ex_type(message)
+
+        return ret
+    return wrapper
+
+decode_model = processify(decode_model)
 
 
 def denoise_wav(src_wav_file, dest_wav_file, global_mean, global_var, use_gpu,
@@ -193,14 +217,7 @@ def denoise_wav(src_wav_file, dest_wav_file, global_mean, global_var, use_gpu,
             # be output to the temp directory as irm.mat. In order to avoid a
             # memory leak, must do this in a separate process which we then
             # kill.
-            p = Process(
-                target=decode_model,
-                args=(noisy_normed_lps_scp_fn, tmp_dir, NFREQS, use_gpu, gpu_id))
-            p.start()
-            p.join()
-            if p.exception:
-                e, tb = p.exception
-                raise type(e)(tb)
+            decode_model(noisy_normed_lps_scp_fn, tmp_dir, NFREQS, use_gpu, gpu_id)
 
             # Read in IRM and directly mask the original LPS features.
             irm = sio.loadmat(irm_fn)['IRM']
@@ -252,8 +269,19 @@ def main_denoising(wav_files, output_dir, wav_dir=None, verbose=False, **kwargs)
             raise Exception('File "%s" does not exist.' % src_wav_file)
 
         if not utils.is_wav(src_wav_file):
-            raise Exception('File "%s" is not valid WAV. Type: %s' %
-                            (src_wav_file, utils.get_file_type(src_wav_file)))
+            try:
+                fp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+                # run WAV conversion
+                cmdline = "ffmpeg -i {} -flags bitexact -acodec pcm_s16le {}".format(src_wav_file, fp.name)
+                print("run: {}".format(cmdline))
+                r = subprocess.run(cmdline.split(), stdout=sys.stdout, stderr=sys.stderr)
+                if r.returncode != 0:
+                    print("run failed: {}".format(cmdline))
+                    return
+                src_wav_file = fp.name
+            except:
+                raise Exception('File "%s" could not be converted to valid WAV. Type: %s' %
+                                (src_wav_file, utils.get_file_type(src_wav_file)))
 
         if utils.get_sr(src_wav_file) != SR:
             utils.warn('Sample rate of file "%s" is %d Hz. Will convert to %d Hz.' %
