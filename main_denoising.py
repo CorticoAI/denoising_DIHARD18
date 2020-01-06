@@ -264,6 +264,12 @@ def main_denoising(wav_files, output_dir, wav_dir=None, verbose=False, **kwargs)
 
     # Perform speech enhancement.
     for src_wav_file in wav_files:
+        # Capture input filename and extension.
+        if wav_dir:
+            filename, ext = os.path.splitext(src_wav_file.replace(wav_dir, '', 1).lstrip('/'))
+        else:
+            filename, ext = os.path.splitext(os.path.basename(src_wav_file))
+
         # Perform basic checks of input WAV.
         if not os.path.exists(src_wav_file):
             raise Exception('File "%s" does not exist.' % src_wav_file)
@@ -324,11 +330,6 @@ def main_denoising(wav_files, output_dir, wav_dir=None, verbose=False, **kwargs)
                     raise e
 
             # merge denoised channels into single WAV, write to persistent output dir
-            if wav_dir:
-                filename, ext = os.path.splitext(src_wav_file.replace(wav_dir, '', 1).lstrip('/'))
-            else:
-                filename, ext = os.path.splitext(os.path.basename(src_wav_file))
-
             subdir_path = os.path.join(output_dir, os.path.dirname(filename))
             if not os.path.exists(subdir_path):
                 os.makedirs(subdir_path)
