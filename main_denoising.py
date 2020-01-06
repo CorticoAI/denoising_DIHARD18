@@ -272,7 +272,7 @@ def main_denoising(wav_files, output_dir, wav_dir=None, verbose=False, **kwargs)
             try:
                 fp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
                 # run WAV conversion
-                cmdline = "ffmpeg -i {} -flags bitexact -acodec pcm_s16le {}".format(src_wav_file, fp.name)
+                cmdline = "ffmpeg -y -i {} -flags bitexact -acodec pcm_s16le {}".format(src_wav_file, fp.name)
                 print("run: {}".format(cmdline))
                 r = subprocess.run(cmdline.split(), stdout=sys.stdout, stderr=sys.stderr)
                 if r.returncode != 0:
