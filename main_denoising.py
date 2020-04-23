@@ -6,7 +6,7 @@ enhancement model (Lei et al, 2018; Gao et al, 2018; Lei et al, 2017). To perfor
 enhancement for all WAV files under the directory ``wav_dir/`` and write the
 enhanced audio to ``se_wav_dir/`` as WAV files:
 
-    python main_denoising.py --wav_dir wav_dir --output_dir se_wav_dir
+    python main_denoising.py --wav-dir wav_dir --output-dir se_wav_dir
 
 For each file with the ``.wav`` extension under ``wav_dir/``, there will now be
 a corresponding enhanced version under ``se_wav_dir``.
@@ -21,23 +21,23 @@ WAV files with one path per line:
 
 This functionality is enabled via the ``-S`` flag, as in the following:
 
-   python main_denoising.py -S some.scp --output_dir se_wav_dir/
+   python main_denoising.py -S some.scp --output-dir se_wav_dir/
 
 As this model is computationally demanding, use of a GPU is recommended, which
-may be enabled via the ``--use_gpu`` and ``--gpu_id`` flags. The ``--use_gpu`` flag
+may be enabled via the ``--use-gpu`` and ``--gpu-id`` flags. The ``--use-gpu`` flag
 indicates whether or not to use a GPU with possible values being ``false`` and ``true``.
-The ``--gpu_id`` flag specifies the device id of the GPU to use. For instance:
+The ``--gpu-id`` flag specifies the device id of the GPU to use. For instance:
 
-   python main_denoising.py --use_gpu true --gpu_id 0 -S some.scp --output_dir se_wav_dir/
+   python main_denoising.py --use-gpu true --gpu-id 0 -S some.scp --output-dir se_wav_dir/
 
 will perform enhancement using the GPU with device id 0.
 
 If you find that you have insufficient available GPU memory to run the model, try
-adjusting the flag ``--truncate_minutes``, which controls the length of audio
-chunks processed. Smaller values of ``--truncate_minutes`` will lead to a smaller
+adjusting the flag ``--truncate-minutes``, which controls the length of audio
+chunks processed. Smaller values of ``--truncate-minutes`` will lead to a smaller
 memory footprint. For instance:
 
-   python main_denoising.py --truncate_minutes 10 --use_gpu true --gpu_id 0 -S some.scp --output_dir se_wav_dir/
+   python main_denoising.py --truncate-minutes 10 --use-gpu true --gpu-id 0 -S some.scp --output-dir se_wav_dir/
 
 will perform enhancement on the GPU using chunks that are 10 minutes in duration. This should use at
 most 8 GB of GPU memory.
@@ -352,24 +352,24 @@ def main():
     parser = argparse.ArgumentParser(
         description='Denoise WAV files.', add_help=True)
     parser.add_argument(
-        '--wav_dir', nargs=None, type=str, metavar='STR',
+        '--wav-dir', nargs=None, type=str, metavar='STR',
         help='directory containing WAV files to denoise '
              '(default: %(default)s')
     parser.add_argument(
-        '--output_dir', nargs=None, type=str, metavar='STR',
+        '--output-dir', nargs=None, type=str, metavar='STR',
         help='output directory for denoised WAV files (default: %(default)s)')
     parser.add_argument(
         '-S', dest='scpf', nargs=None, type=str, metavar='STR',
         help='script file of paths to WAV files to denoise (default: %(default)s)')
     parser.add_argument(
-        '--use_gpu', nargs=None, default='true', type=str, metavar='STR',
+        '--use-gpu', nargs=None, default='true', type=str, metavar='STR',
         choices=['true', 'false'],
         help='whether or not to use GPU (default: %(default)s)')
     parser.add_argument(
-        '--gpu_id', nargs=None, default=0, type=int, metavar='INT',
+        '--gpu-id', nargs=None, default=0, type=int, metavar='INT',
         help='device id of GPU to use (default: %(default)s)')
     parser.add_argument(
-        '--truncate_minutes', nargs=None, default=10, type=float,
+        '--truncate-minutes', nargs=None, default=10, type=float,
         metavar='FLOAT',
         help='maximum chunk size in minutes (default: %(default)s)')
     parser.add_argument(
@@ -380,7 +380,7 @@ def main():
         sys.exit(1)
     args = parser.parse_args()
     if not utils.xor(args.wav_dir, args.scpf):
-        parser.error('Exactly one of --wav_dir and -S must be set.')
+        parser.error('Exactly one of --wav-dir and -S must be set.')
         sys.exit(1)
     use_gpu = args.use_gpu == 'true'
 
